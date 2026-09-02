@@ -179,16 +179,8 @@
   }
   @media (min-width:761px) and (max-width:980px){ .kpi-grid{grid-template-columns:repeat(3,1fr);} }
 
-  /* ---- sign-in gate ---- */
-  #gate{ position:fixed; inset:0; z-index:100; background:var(--paper); display:flex; align-items:center; justify-content:center; padding:20px; }
-  .gate-card{ max-width:380px; width:100%; text-align:center; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:32px 28px; box-shadow:var(--shadow); }
-  .gate-mark{ width:72px; height:72px; border-radius:50%; object-fit:cover; margin:0 auto 16px; box-shadow:0 0 0 1px var(--line); }
-  .gate-card h1{font-size:19px; margin:0 0 6px;}
-  .gate-card p{font-size:13px; color:var(--ink-2); margin:0 0 22px; line-height:1.5;}
-  .gate-btn{ display:inline-flex; align-items:center; gap:10px; background:var(--accent); color:var(--accent-ink); border:none; padding:11px 20px; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; }
-  .gate-btn:hover{opacity:.92;}
-  .gate-err{margin-top:16px; font-size:11.5px; color:var(--critical); text-align:left; background:color-mix(in srgb, var(--critical) 10%, transparent); border-radius:8px; padding:10px 12px; display:none;}
-  .gate-note{margin-top:18px; font-size:10.5px; color:var(--ink-3);}
+  .sync-pill.signedout{ background:var(--accent-wash); border-color:var(--accent); color:var(--accent); font-weight:700; }
+  .sync-dot.signedout{ background:var(--ink-3); box-shadow:0 0 0 3px color-mix(in srgb, var(--ink-3) 22%, transparent); }
 
   #warnBanner{ display:none; max-width:1180px; margin:12px auto 0; padding:10px 16px; background:color-mix(in srgb, var(--critical) 12%, transparent); border:1px solid color-mix(in srgb, var(--critical) 35%, transparent); border-radius:10px; font-size:12px; color:var(--ink); }
   #warnBanner ul{margin:6px 0 0; padding-left:18px;}
@@ -196,18 +188,7 @@
 </head>
 <body>
 
-<div id="gate">
-  <div class="gate-card">
-    <img class="gate-mark" src="logo.png" alt="Bake It More logo">
-    <h1>Bake It More</h1>
-    <p>Sign in with the Google account that has access to your Order Tracker, Inventory, Price List and Income Statement files to load live data.</p>
-    <button class="gate-btn" id="signInBtn">Sign in with Google</button>
-    <div class="gate-err" id="gateErr"></div>
-    <div class="gate-note">Read-only access. Nothing is ever written back to your Drive.</div>
-  </div>
-</div>
-
-<header class="top" style="display:none;" id="appHeader">
+<header class="top" id="appHeader">
   <div class="top-inner">
     <div class="brand">
       <img class="brand-mark" src="logo.png" alt="Bake It More logo">
@@ -224,7 +205,7 @@
 
 <div id="warnBanner"></div>
 
-<main id="appMain" style="display:none;">
+<main id="appMain">
   <section class="view" id="view-overview"></section>
   <section class="view" id="view-inventory"></section>
   <section class="view" id="view-pricelist"></section>
@@ -232,9 +213,9 @@
   <section class="view" id="view-platform"></section>
 </main>
 
-<nav class="tabs mobile" id="tabsMobile" style="display:none;"></nav>
+<nav class="tabs mobile" id="tabsMobile"></nav>
 
-<footer class="foot" id="appFooter" style="display:none;">
+<footer class="foot" id="appFooter">
   <div>Live from your Google Drive: current-month BIM Order Tracker, Inventory, BakeItMore_PriceList_Categorized, current-year BakeItMore Income Statement. Refreshes automatically every 5 minutes while this page is open. <button class="signout" id="signOutBtn">Sign out</button></div>
 </footer>
 
@@ -245,10 +226,13 @@
 <script src="app.js"></script>
 <script>
 function setStatus(state, errors){
+  const pill = document.getElementById('syncPill');
   const dot = document.getElementById('syncDot');
   const label = document.querySelector('#syncPill .long');
   const time = document.getElementById('syncTime');
-  dot.classList.remove('loading','warn');
+  pill.classList.remove('signedout');
+  pill.title = 'Click to refresh now';
+  dot.classList.remove('loading','warn','signedout');
   if(state==='loading'){ dot.classList.add('loading'); label.textContent = 'Syncing…'; }
   else if(state==='warn'){ dot.classList.add('warn'); label.textContent = 'Partial'; }
   else { label.textContent = 'Live'; }
@@ -262,24 +246,33 @@ function setStatus(state, errors){
     banner.style.display = 'none';
   }
 }
-function showAuthError(resp){
-  document.getElementById('gateErr').style.display = 'block';
-  document.getElementById('gateErr').textContent = 'Sign-in failed: ' + (resp.error_description || resp.error || 'unknown error') + '. Make sure your Google account is added as a Test user in the OAuth consent screen.';
+function setSignedOut(){
+  const pill = document.getElementById('syncPill');
+  const dot = document.getElementById('syncDot');
+  const label = document.querySelector('#syncPill .long');
+  pill.classList.add('signedout');
+  pill.title = 'Click to sign in with Google';
+  dot.classList.remove('loading','warn');
+  dot.classList.add('signedout');
+  label.textContent = 'Sign in';
+  document.getElementById('syncTime').textContent = '';
 }
-function showApp(){
-  document.getElementById('gate').style.display = 'none';
-  document.getElementById('appHeader').style.display = '';
-  document.getElementById('appMain').style.display = '';
-  document.getElementById('tabsMobile').style.display = '';
-  document.getElementById('appFooter').style.display = '';
+function showAuthError(resp){
+  setSignedOut();
+  const banner = document.getElementById('warnBanner');
+  banner.style.display = 'block';
+  const msg = (resp.error_description || resp.error || 'unknown error').replace(/[<>]/g,'');
+  banner.innerHTML = '<strong>Sign-in failed:</strong> ' + msg + '. Click the "Sign in" pill in the header to try again.';
 }
 
 function waitForGoogleIdentity(cb, triesLeft){
   triesLeft = triesLeft === undefined ? 100 : triesLeft; // ~10s max
   if(window.google && window.google.accounts && window.google.accounts.oauth2){ cb(); return; }
   if(triesLeft <= 0){
-    document.getElementById('gateErr').style.display = 'block';
-    document.getElementById('gateErr').textContent = "Google's sign-in script didn't load — check your connection and reload the page.";
+    setSignedOut();
+    const banner = document.getElementById('warnBanner');
+    banner.style.display = 'block';
+    banner.innerHTML = "<strong>Couldn't load Google sign-in:</strong> check your connection and reload the page.";
     return;
   }
   setTimeout(() => waitForGoogleIdentity(cb, triesLeft-1), 100);
@@ -288,13 +281,17 @@ function waitForGoogleIdentity(cb, triesLeft){
 window.addEventListener('DOMContentLoaded', () => {
   buildTabs();
   switchTab('overview');
-  document.getElementById('signInBtn').addEventListener('click', signIn);
+  setSignedOut();
   document.getElementById('signOutBtn').addEventListener('click', signOut);
-  document.getElementById('syncPill').addEventListener('click', loadAll);
+  document.getElementById('syncPill').addEventListener('click', () => accessToken ? loadAll() : signIn());
 
   waitForGoogleIdentity(() => {
+    // Google requires the sign-in request to come from a direct user click,
+    // not a script-fired call on page load (it rejects those with a 400
+    // invalid_request "doesn't comply with OAuth 2.0 policy" error) — so we
+    // just get the token client ready here and let the "Sign in" pill click
+    // (wired above) be what actually calls signIn().
     initAuth(async () => {
-      showApp();
       await loadAll();
       startAutoRefresh();
     });
