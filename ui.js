@@ -306,14 +306,22 @@ function renderPriceList(){
 }
 
 /* ================================ FINANCIALS ================================ */
+let finYear = null, finLoading = false, finError = null;
 function renderFinancials(){
   const v = document.getElementById('view-financials');
+  if(finYear === null && window.FIN_YEAR) finYear = window.FIN_YEAR;
   if(!FIN){ v.innerHTML = `<div class="view-head"><h2>Financials</h2></div>${emptyState('Financial data not loaded yet.')}`; return; }
+  const years = (window.IS_FILES || []).map(f=>f.year);
+  const yearSel = years.length > 1 ? `<select id="finYearSel" ${finLoading?'disabled':''} style="padding:7px 10px;border-radius:9px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-size:12.5px;font-family:inherit;">
+      ${years.map(y=>`<option value="${y}" ${y===finYear?'selected':''}>${y}</option>`).join('')}
+    </select>` : '';
   const k = FIN.kpi;
   const revExpMax = Math.max(...FIN.monthly.map(m=>Math.max(m.rev,m.exp)), 1);
   const chequeCashTotal = (FIN.collections.cheque + FIN.collections.cash) || 1;
   v.innerHTML = `
-    <div class="view-head"><h2>Financials</h2><span class="period">Year to date</span></div>
+    <div class="view-head"><h2>Financials</h2><span class="period">${finYear||''} · Year to date</span></div>
+    ${years.length > 1 ? `<div class="toolbar" style="justify-content:flex-end;">${finLoading?'<span style="font-size:11.5px;color:var(--ink-3);">Loading…</span>':''}${yearSel}</div>` : ''}
+    ${finError ? `<div style="font-size:11.5px;color:var(--critical);margin-bottom:12px;">${esc(finError)}</div>` : ''}
     ${kpiGrid([
       {label:'Total Revenue YTD', value:peso(k.revenue,{compact:true})},
       {label:'Total Expenses YTD', value:peso(k.expenses,{compact:true})},
@@ -359,6 +367,24 @@ function renderFinancials(){
         <tbody>${FIN.topPayers.length ? FIN.topPayers.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.name)}</td><td class="num">${peso(p.amount,{decimals:2})}</td></tr>`).join('') : `<tr><td colspan="3">${emptyState('No payer data found.')}</td></tr>`}</tbody>
       </table></div>
     </div>`;
+
+  const sel = document.getElementById('finYearSel');
+  if(sel) sel.addEventListener('change', async e => {
+    const y = +e.target.value;
+    if(y === finYear) return;
+    finLoading = true; finError = null; renderFinancials();
+    try{
+      const loaded = await loadFinancialsForYear(y);
+      FIN = loaded.fin; finYear = y;
+      window.PLATFORM_INCOME_WB = loaded.workbook;
+      window.PLATFORM_INCOME_MONTHS = loaded.months;
+      platformMonth = loaded.months.length ? loaded.months[loaded.months.length-1] : null;
+    } catch(err){
+      finError = "Couldn't load " + y + ": " + err.message;
+    } finally {
+      finLoading = false; renderFinancials();
+    }
+  });
 }
 
 /* ============================= PLATFORM REPORT ============================= */

@@ -74,12 +74,36 @@ async function resolveOrderTrackerFile(){
   if(!xlsx.length) throw new Error("No 'BIM Order Tracker' file found in the configured folder.");
   return xlsx[0]; // orderBy modifiedTime desc already
 }
-/* pick income statement matching current year, fallback to most recent */
-async function resolveIncomeStatementFile(){
+/* every Income Statement file in the folder, tagged with the year found in
+   its name (works for both "BakeItMore IS <Year>.xlsx" and
+   "BakeItMore_IS_<Year>.xlsx" naming) — lets the Financials tab offer any
+   year that has a file sitting in Drive, current or future/blank template,
+   without needing the folder ID or naming convention hardcoded per year. */
+async function listIncomeStatementFiles(){
   const files = await listFolder(CONFIG.INCOME_STATEMENT_FOLDER_ID);
-  const year = String(new Date().getFullYear());
-  const named = files.find(f => f.name.includes(year));
-  return named || files[0];
+  return files
+    .map(f => { const m = f.name.match(/20\d\d/); return m ? Object.assign({year: +m[0]}, f) : null; })
+    .filter(Boolean)
+    .sort((a,b) => a.year - b.year);
+}
+/* pick income statement matching current year, fallback to most recent */
+function pickDefaultIncomeStatementFile(files){
+  const year = new Date().getFullYear();
+  return files.find(f => f.year === year) || files[files.length-1] || files[0];
+}
+/* year -> {workbook, fin, months} cache so switching years in the Financials
+   tab doesn't re-download/re-parse a file you've already looked at. */
+const FIN_CACHE = {};
+async function loadFinancialsForYear(year){
+  if(FIN_CACHE[year]) return FIN_CACHE[year];
+  const files = window.IS_FILES || (window.IS_FILES = await listIncomeStatementFiles());
+  const file = files.find(f => f.year === year);
+  if(!file) throw new Error("No Income Statement file found for " + year);
+  const workbook = (await downloadWorkbook(file.id)).workbook;
+  const fin = extractFinancials(workbook);
+  const months = sortMonthNames(findAvailablePlatformMonths(workbook));
+  FIN_CACHE[year] = { workbook, fin, months };
+  return FIN_CACHE[year];
 }
 
 /* ------------------------------ SHEET HELPERS ----------------------------- */
@@ -585,9 +609,13 @@ async function loadAll(){
     salesWb = (await downloadWorkbook(otFile.id)).workbook;
   } catch(e){ errors.push("Order Tracker: " + e.message); }
 
+  let finYear;
   try{
-    const isFile = await resolveIncomeStatementFile();
+    window.IS_FILES = await listIncomeStatementFiles();
+    const isFile = pickDefaultIncomeStatementFile(window.IS_FILES);
+    if(!isFile) throw new Error("No Income Statement file found in the configured folder.");
     finWb = (await downloadWorkbook(isFile.id)).workbook;
+    finYear = isFile.year;
   } catch(e){ errors.push("Income Statement: " + e.message); }
 
   try{
@@ -599,7 +627,7 @@ async function loadAll(){
   } catch(e){ errors.push("Price List: " + e.message); }
 
   try{ if(salesWb) window.SALES_LIVE = extractSales(salesWb); } catch(e){ errors.push("Order Tracker parse: " + e.message); }
-  try{ if(finWb) window.FIN_LIVE = extractFinancials(finWb); } catch(e){ errors.push("Income Statement parse: " + e.message); }
+  try{ if(finWb) window.FIN_LIVE = extractFinancials(finWb); window.FIN_YEAR = finYear; } catch(e){ errors.push("Income Statement parse: " + e.message); }
   try{ if(invWb) window.INV_LIVE = extractInventory(invWb); } catch(e){ errors.push("Inventory parse: " + e.message); }
   try{ if(plWb) window.PL_LIVE = extractPriceList(plWb); } catch(e){ errors.push("Price List parse: " + e.message); }
   try{
@@ -609,6 +637,7 @@ async function loadAll(){
     if(finWb){
       window.PLATFORM_INCOME_WB = finWb;
       window.PLATFORM_INCOME_MONTHS = sortMonthNames(findAvailablePlatformMonths(finWb));
+      if(finYear !== undefined) FIN_CACHE[finYear] = { workbook: finWb, fin: window.FIN_LIVE, months: window.PLATFORM_INCOME_MONTHS };
     }
   } catch(e){ errors.push("Platform Income parse: " + e.message); }
 
