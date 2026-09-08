@@ -1,44 +1,406 @@
-From e462b58ef91084585051f8036a9f47da81c9c6c9 Mon Sep 17 00:00:00 2001
-From: Claude <noreply@anthropic.com>
-Date: Tue, 8 Sep 2026 12:59:55 +0000
-Subject: [PATCH] Sort buyer catalog categories alphabetically
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bake It More</title>
+<link rel="icon" type="image/png" href="logo.png">
+<style>
+  :root{
+    color-scheme: light;
+    --paper:#F5EFE4; --surface:#FFFFFF; --surface-2:#FBF6EC;
+    --ink:#241A12; --ink-2:#63513F; --ink-3:#9B876F;
+    --line:#E6D9C4; --line-strong:#D8C7AA;
+    --accent:#B15A26; --accent-ink:#FFFFFF; --accent-wash:#F3E2CE;
+    --shadow: 0 1px 2px rgba(36,26,18,0.06), 0 8px 24px -12px rgba(36,26,18,0.18);
+    --good:#0ca30c; --warn:#fab219; --critical:#d03b3b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){
+      color-scheme: dark;
+      --paper:#161009; --surface:#1F160E; --surface-2:#251A11;
+      --ink:#F3E9DC; --ink-2:#C9B49C; --ink-3:#8C7A66;
+      --line:#3B2C1D; --line-strong:#4A3826;
+      --accent:#E38F4B; --accent-ink:#221407; --accent-wash:#3A2717;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+      --good:#0ca30c; --warn:#fab219; --critical:#e66767;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --paper:#161009; --surface:#1F160E; --surface-2:#251A11;
+    --ink:#F3E9DC; --ink-2:#C9B49C; --ink-3:#8C7A66;
+    --line:#3B2C1D; --line-strong:#4A3826;
+    --accent:#E38F4B; --accent-ink:#221407; --accent-wash:#3A2717;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    --good:#0ca30c; --warn:#fab219; --critical:#e66767;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{ background:var(--paper); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; -webkit-font-smoothing:antialiased; min-height:100vh; padding-bottom:76px; }
+  a{color:inherit;}
 
-Category chips and section headings on the buyer-catalog price list
-were ordered by first appearance in the spreadsheet; now sorted
-alphabetically (case-insensitive) for easier browsing.
+  header.top{ position:sticky; top:0; z-index:20; background:color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(8px); border-bottom:1px solid var(--line); }
+  .top-inner{ max-width:1000px; margin:0 auto; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand-mark{ width:38px;height:38px;border-radius:50%; object-fit:cover; flex:none; box-shadow:0 0 0 1px var(--line); }
+  .brand-text h1{font-size:15.5px; margin:0; font-weight:700;}
+  .brand-text p{font-size:11.5px; margin:1px 0 0; color:var(--ink-3);}
+  .sync-pill{ display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--ink-2); background:var(--surface); border:1px solid var(--line); padding:6px 11px; border-radius:100px; white-space:nowrap; }
+  .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--good); flex:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent);}
+  .sync-dot.loading{background:var(--warn); animation:pulse 1s infinite;}
+  .sync-dot.warn{background:var(--critical);}
+  @keyframes pulse{50%{opacity:.4}}
 
-Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01WVP6cR7Fx19qoefMEqTnUo
----
- buyer-catalog/index.html | 7 +++++--
- 1 file changed, 5 insertions(+), 2 deletions(-)
+  nav.tabs{ max-width:1000px; margin:0 auto; padding:0 20px; display:flex; gap:4px; }
+  .tab-btn{ appearance:none; border:none; background:transparent; cursor:pointer; color:var(--ink-2); font-size:13.5px; font-weight:600; padding:10px 14px 12px; border-bottom:2px solid transparent; display:flex; align-items:center; gap:7px; white-space:nowrap; font-family:inherit; }
+  .tab-btn svg{width:16px;height:16px;flex:none;}
+  .tab-btn.active{color:var(--accent); border-bottom-color:var(--accent);}
 
-diff --git a/buyer-catalog/index.html b/buyer-catalog/index.html
-index b7b565d..d7db04c 100644
---- a/buyer-catalog/index.html
-+++ b/buyer-catalog/index.html
-@@ -305,9 +305,12 @@ function priceCard(p){
-     <div class="pp">${p.price!==null ? peso(p.price,{decimals: p.price%1?2:0}) : 'Ask us'}</div>
-     ${p.note ? `<div class="pnote">${esc(p.note)}</div>` : ''}</div>`;
- }
-+function getSortedCats(){
-+  return [...new Set(PRICELIST.map(p=>p.cat))].sort((a,b)=>a.localeCompare(b, undefined, {sensitivity:'base'}));
-+}
- function renderPricesGrid(){
-   const host = document.getElementById('plGrid');
--  const cats = [...new Set(PRICELIST.map(p=>p.cat))];
-+  const cats = getSortedCats();
-   let items = PRICELIST.filter(p => (plFilter.cat==='All'||p.cat===plFilter.cat) && (!plFilter.q || (p.n+' '+p.sz).toLowerCase().includes(plFilter.q.toLowerCase())));
-   if(!items.length){ host.innerHTML = `<div class="empty">No products match your search.</div>`; return; }
-   if(plFilter.cat !== 'All'){ host.innerHTML = `<div class="pricegrid">${items.map(priceCard).join('')}</div>`; }
-@@ -318,7 +321,7 @@ function renderPricesGrid(){
- function renderPrices(){
-   const v = document.getElementById('view-prices');
-   if(!PRICELIST.length){ v.innerHTML = `<div class="view-head"><h2>Price List</h2></div><div class="empty">Loading products…</div>`; return; }
--  const cats = [...new Set(PRICELIST.map(p=>p.cat))];
-+  const cats = getSortedCats();
-   v.innerHTML = `
-     <div class="view-head"><h2>Price List</h2><span class="period">${PRICELIST.length} products</span></div>
-     <div class="toolbar"><input type="search" id="plSearch" placeholder="Search product or size…"></div>
--- 
-2.43.0
+  main{max-width:1000px; margin:0 auto; padding:22px 20px 40px;}
+  .view{display:none;}
+  .view.active{display:block; animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(4px)} to{opacity:1; transform:translateY(0)}}
+  .view-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap;}
+  .view-head h2{font-size:19px; margin:0; font-weight:700;}
+  .view-head .period{font-size:12.5px; color:var(--ink-3);}
+
+  .grid{display:grid; gap:12px;}
+  .kpi-grid{grid-template-columns:repeat(3,1fr); margin-bottom:16px;}
+  .kpi{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 15px; }
+  .kpi .lbl{font-size:11px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.06em; font-weight:600;}
+  .kpi .val{font-family: Georgia,"Iowan Old Style","Times New Roman",serif; font-size:24px; font-weight:600; margin-top:5px; line-height:1.1;}
+
+  .toolbar{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:center;}
+  .toolbar input[type=search]{ flex:1; min-width:180px; padding:9px 12px; border-radius:9px; border:1px solid var(--line-strong); background:var(--surface); color:var(--ink); font-size:13px; font-family:inherit; }
+  .chip{ padding:6px 12px; border-radius:100px; border:1px solid var(--line-strong); background:var(--surface); font-size:12px; font-weight:600; color:var(--ink-2); cursor:pointer; white-space:nowrap; }
+  .chip.active{background:var(--accent); border-color:var(--accent); color:var(--accent-ink);}
+  .chipbar{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:14px;}
+
+  .pricecard{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 14px;}
+  .pricecard .pn{font-weight:700; font-size:13px;}
+  .pricecard .pm{font-size:11.5px; color:var(--ink-3); margin-top:2px;}
+  .pricecard .pp{font-family: Georgia,"Iowan Old Style",serif; font-size:16px; font-weight:700; color:var(--accent); margin-top:8px;}
+  .pricecard .pnote{font-size:10.5px; color:var(--ink-3); margin-top:3px;}
+  .pricegrid{display:grid; grid-template-columns:repeat(auto-fill, minmax(190px,1fr)); gap:10px;}
+  .cat-heading{font-size:13px; font-weight:700; margin:22px 0 10px; padding-bottom:6px; border-bottom:1px solid var(--line-strong); color:var(--accent);}
+  .cat-heading:first-child{margin-top:0;}
+
+  table.dt{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.dt th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); font-weight:700; padding:8px 10px; border-bottom:1px solid var(--line-strong); position:sticky; top:0; background:var(--surface); white-space:nowrap; }
+  table.dt td{padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  table.dt tr:hover td{background:var(--surface-2);}
+  table.dt td.num{text-align:right; font-variant-numeric:tabular-nums;}
+  .table-wrap{max-height:560px; overflow:auto; border:1px solid var(--line); border-radius:10px;}
+
+  .badge{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:100px; white-space:nowrap; line-height:1.5; }
+  .badge.good{color:var(--good); background:color-mix(in srgb, var(--good) 14%, transparent);}
+  .badge.warn{color:#8a5c00; background:color-mix(in srgb, var(--warn) 30%, transparent);}
+  :root[data-theme="dark"] .badge.warn, :root:not([data-theme="light"]) .badge.warn{color:var(--warn);}
+  .badge.critical{color:var(--critical); background:color-mix(in srgb, var(--critical) 16%, transparent);}
+  .badge::before{content:""; width:6px; height:6px; border-radius:50%; background:currentColor;}
+
+  .empty{padding:30px 10px; color:var(--ink-3); font-size:12.5px; text-align:center;}
+  footer.foot{max-width:1000px; margin:20px auto 0; padding:16px 20px 0; border-top:1px solid var(--line); color:var(--ink-3); font-size:11.5px; line-height:1.6;}
+  #warnBanner{ display:none; max-width:1000px; margin:12px auto 0; padding:10px 16px; background:color-mix(in srgb, var(--critical) 12%, transparent); border:1px solid color-mix(in srgb, var(--critical) 35%, transparent); border-radius:10px; font-size:12px; color:var(--ink); }
+
+  @media (max-width:640px){
+    .kpi-grid{grid-template-columns:repeat(3,1fr); gap:8px;}
+    .kpi{padding:10px 11px;}
+    .kpi .val{font-size:18px;}
+    main{padding:16px 14px 24px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <img class="brand-mark" src="logo.png" alt="Bake It More logo">
+      <div class="brand-text"><h1>Bake It More</h1><p>Price List &amp; Availability</p></div>
+    </div>
+    <div class="sync-pill" id="syncPill">
+      <span class="sync-dot" id="syncDot"></span>
+      <span id="syncLabel">Loading</span>
+    </div>
+  </div>
+  <nav class="tabs" id="tabsNav"></nav>
+</header>
+
+<div id="warnBanner"></div>
+
+<main>
+  <section class="view" id="view-prices"></section>
+  <section class="view" id="view-stock"></section>
+</main>
+
+<footer class="foot">
+  Prices and stock shown here update automatically from our live inventory system. Availability may change between the time you view this page and when you order — please confirm at checkout.
+</footer>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="config.js"></script>
+<script>
+/* ============================= ICONS ============================= */
+const ICONS = {
+  prices: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 12.9 12.7 21a2 2 0 0 1-2.8 0L3.5 14.6a2 2 0 0 1 0-2.8L11.4 3.7a2 2 0 0 1 1.4-.6H19a2 2 0 0 1 2 2v6.4a2 2 0 0 1-.4 1.4Z"/><circle cx="15.5" cy="7.5" r="1.4"/></svg>',
+  stock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l9-5 9 5-9 5-9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
+};
+const TABS = [ {id:'prices', label:'Price List'}, {id:'stock', label:'Availability'} ];
+
+/* ============================= HELPERS ============================= */
+function peso(n, opts){
+  opts = opts || {};
+  n = n || 0;
+  const d = opts.decimals !== undefined ? opts.decimals : 0;
+  return "₱" + n.toLocaleString("en-PH", {maximumFractionDigits:d, minimumFractionDigits:d});
+}
+function num(n){ return (n||0).toLocaleString("en-US"); }
+function esc(s){ return (s||"").toString().replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function cellText(v){ return (v===undefined||v===null) ? "" : String(v).trim(); }
+function toNum(v){
+  if(v===undefined||v===null||v==="") return 0;
+  let s = String(v).trim();
+  if(s==="") return 0;
+  const negParen = /^\(.*\)$/.test(s);
+  if(negParen) s = s.slice(1,-1);
+  const m = s.match(/-?\d[\d,]*\.?\d*/);
+  if(!m) return 0;
+  const n = parseFloat(m[0].replace(/,/g,""));
+  if(isNaN(n)) return 0;
+  return negParen ? -n : n;
+}
+function sheetRows(workbook, sheetName){
+  const sheet = workbook.Sheets[sheetName];
+  if(!sheet) return null;
+  return XLSX.utils.sheet_to_json(sheet, {header:1, defval:"", raw:false});
+}
+function findHeaderRow(rows, colNamesLower){
+  for(let r=0; r<rows.length; r++){
+    const lower = rows[r].map(c => cellText(c).toLowerCase());
+    if(colNamesLower.every(n => lower.includes(n))) return {rowIdx:r, cols: colNamesLower.map(n => lower.indexOf(n))};
+  }
+  return null;
+}
+
+/* ============================= DRIVE (anonymous, API-key only) ============================= */
+const DRIVE = "https://www.googleapis.com/drive/v3";
+async function driveFetch(url){
+  const bust = (url.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+  const res = await fetch(url + bust, { cache: "no-store" });
+  if(!res.ok){
+    let msg = "Drive API " + res.status;
+    try{ const j = await res.json(); if(j.error && j.error.message) msg += ": " + j.error.message; }catch(e){}
+    throw new Error(msg);
+  }
+  return res;
+}
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+async function downloadWorkbook(fileId){
+  const metaRes = await driveFetch(`${DRIVE}/files/${fileId}?fields=id,name,mimeType&key=${CONFIG.API_KEY}`);
+  const meta = await metaRes.json();
+  let res;
+  if(meta.mimeType === "application/vnd.google-apps.spreadsheet"){
+    res = await driveFetch(`${DRIVE}/files/${fileId}/export?mimeType=${encodeURIComponent(XLSX_MIME)}&key=${CONFIG.API_KEY}`);
+  } else {
+    res = await driveFetch(`${DRIVE}/files/${fileId}?alt=media&key=${CONFIG.API_KEY}`);
+  }
+  const buf = await res.arrayBuffer();
+  return XLSX.read(buf, {type:"array", cellDates:true});
+}
+
+/* ============================= EXTRACTORS (buyer-safe fields only) ============================= */
+function extractPriceList(workbook){
+  const out = [];
+  for(const name of workbook.SheetNames){
+    const rows = sheetRows(workbook, name);
+    if(!rows) continue;
+    const hdr = findHeaderRow(rows, ["product name","price"]);
+    if(!hdr) continue;
+    const headerRowRaw = rows[hdr.rowIdx].map(c=>cellText(c).toLowerCase());
+    const cName = headerRowRaw.indexOf("product name");
+    const cSize = headerRowRaw.findIndex(h=>h.includes("size")||h.includes("variant"));
+    const cPrice = headerRowRaw.indexOf("price");
+    const cNote = headerRowRaw.indexOf("notes");
+    const catLabel = cellText(rows[hdr.rowIdx][0]).replace(/category.*/i,"").trim() || name;
+    for(let r=hdr.rowIdx+1; r<rows.length; r++){
+      const rowVals = rows[r].map(cellText);
+      const pname = cellText(rows[r][cName]);
+      if(!pname || /^out of stock$/i.test(pname)) continue;
+      const os = rowVals.some(v=>v.toUpperCase()==="OS");
+      const priceRaw = cPrice>=0 ? rows[r][cPrice] : "";
+      out.push({
+        cat: catLabel, n: pname,
+        sz: cSize>=0 ? cellText(rows[r][cSize]) : "",
+        price: cellText(priceRaw)==="" ? null : toNum(priceRaw),
+        note: cNote>=0 ? cellText(rows[r][cNote]) : "",
+        os,
+      });
+    }
+  }
+  return out;
+}
+
+function extractStock(workbook){
+  const STOCK_HEADERS = ["realtime stocks quantity","total stock qty","stock qty","stock quantity"];
+  const namedSheet = workbook.SheetNames.find(n => {
+    const t = n.trim().toLowerCase();
+    return t.includes("business") && t.includes("inventory");
+  });
+  let table = null;
+  if(namedSheet) table = { name: namedSheet, rows: sheetRows(workbook, namedSheet) };
+  if(!table){
+    for(const n of workbook.SheetNames){
+      const rows = sheetRows(workbook, n);
+      if(!rows) continue;
+      const hasProduct = rows.some(row => row.some(c => cellText(c).toLowerCase()==="product name"));
+      const hasStock = rows.some(row => row.some(c => STOCK_HEADERS.includes(cellText(c).toLowerCase())));
+      if(hasProduct && hasStock){ table = {name:n, rows}; break; }
+    }
+  }
+  if(!table) throw new Error("Couldn't find the inventory table.");
+  const rows = table.rows;
+  const hdr = findHeaderRow(rows, ["product name"]);
+  if(!hdr) throw new Error("Inventory header row didn't match.");
+  const headerRowRaw = rows[hdr.rowIdx].map(c=>cellText(c).toLowerCase());
+  const idx = (name) => headerRowRaw.indexOf(name);
+  const idxAny = (names) => { for(const n of names){ const i = headerRowRaw.indexOf(n); if(i>=0) return i; } return -1; };
+  const cName = idx("product name"), cPart = idx("particulars"), cExp = idx("expiry"), cStock = idxAny(STOCK_HEADERS);
+  if(cStock<0) throw new Error("Couldn't find the Stock Qty column.");
+
+  const items = [];
+  for(let r=hdr.rowIdx+1; r<rows.length; r++){
+    const name = cellText(rows[r][cName]);
+    if(!name || /^(grand\s*)?total/i.test(name)) continue;
+    items.push({ n:name, p: cPart>=0?cellText(rows[r][cPart]):"", exp: cExp>=0?cellText(rows[r][cExp]):"", stock: toNum(rows[r][cStock]) });
+  }
+  return items;
+}
+
+/* ============================= RENDER ============================= */
+let PRICELIST = [], STOCK = [];
+let plFilter = { q:'', cat:'All' };
+let stockFilter = { q:'' };
+
+function buildTabs(){
+  document.getElementById('tabsNav').innerHTML = TABS.map(t => `<button class="tab-btn" data-tab="${t.id}">${ICONS[t.id]}<span>${t.label}</span></button>`).join('');
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.getAttribute('data-tab'))));
+}
+let activeTab = 'prices';
+function switchTab(id){
+  activeTab = id;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-tab')===id));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-'+id));
+  renderActive();
+}
+function renderActive(){
+  if(activeTab==='prices') renderPrices();
+  if(activeTab==='stock') renderStock();
+}
+
+function priceCard(p){
+  return `<div class="pricecard"><div class="pn">${esc(p.n)} ${p.os?'<span class="badge critical">Out of stock</span>':''}</div>
+    <div class="pm">${esc(p.sz)}</div>
+    <div class="pp">${p.price!==null ? peso(p.price,{decimals: p.price%1?2:0}) : 'Ask us'}</div>
+    ${p.note ? `<div class="pnote">${esc(p.note)}</div>` : ''}</div>`;
+}
+function getSortedCats(){
+  return [...new Set(PRICELIST.map(p=>p.cat))].sort((a,b)=>a.localeCompare(b, undefined, {sensitivity:'base'}));
+}
+function renderPricesGrid(){
+  const host = document.getElementById('plGrid');
+  const cats = getSortedCats();
+  let items = PRICELIST.filter(p => (plFilter.cat==='All'||p.cat===plFilter.cat) && (!plFilter.q || (p.n+' '+p.sz).toLowerCase().includes(plFilter.q.toLowerCase())));
+  if(!items.length){ host.innerHTML = `<div class="empty">No products match your search.</div>`; return; }
+  if(plFilter.cat !== 'All'){ host.innerHTML = `<div class="pricegrid">${items.map(priceCard).join('')}</div>`; }
+  else {
+    host.innerHTML = cats.map(cat => { const rows = items.filter(p=>p.cat===cat); if(!rows.length) return ''; return `<div class="cat-heading">${esc(cat)}</div><div class="pricegrid">${rows.map(priceCard).join('')}</div>`; }).join('');
+  }
+}
+function renderPrices(){
+  const v = document.getElementById('view-prices');
+  if(!PRICELIST.length){ v.innerHTML = `<div class="view-head"><h2>Price List</h2></div><div class="empty">Loading products…</div>`; return; }
+  const cats = getSortedCats();
+  v.innerHTML = `
+    <div class="view-head"><h2>Price List</h2><span class="period">${PRICELIST.length} products</span></div>
+    <div class="toolbar"><input type="search" id="plSearch" placeholder="Search product or size…"></div>
+    <div class="chipbar"><button class="chip active" data-cat="All">All</button>${cats.map(c=>`<button class="chip" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+    <div id="plGrid"></div>`;
+  document.getElementById('plSearch').addEventListener('input', e => { plFilter.q = e.target.value; renderPricesGrid(); });
+  v.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => { v.querySelectorAll('.chip').forEach(x=>x.classList.remove('active')); c.classList.add('active'); plFilter.cat = c.getAttribute('data-cat'); renderPricesGrid(); }));
+  renderPricesGrid();
+}
+
+function stockBadge(item){
+  if(item.stock<=0) return '<span class="badge critical">Out of stock</span>';
+  if(item.stock<=10) return '<span class="badge warn">Low stock</span>';
+  return '<span class="badge good">In stock</span>';
+}
+function renderStockTable(){
+  const rows = STOCK.filter(r => !stockFilter.q || (r.n+' '+r.p).toLowerCase().includes(stockFilter.q.toLowerCase()));
+  document.getElementById('stCount').textContent = rows.length + ' of ' + STOCK.length + ' items';
+  document.getElementById('stTbody').innerHTML = rows.length ? rows.map(r => `
+    <tr><td>${esc(r.n)}${r.p?' <span style="color:var(--ink-3)">'+esc(r.p)+'</span>':''}</td>
+      <td class="num">${num(r.stock)}</td>
+      <td>${stockBadge(r)}</td></tr>`).join('') : `<tr><td colspan="3"><div class="empty">No products match your search.</div></td></tr>`;
+}
+function renderStock(){
+  const v = document.getElementById('view-stock');
+  if(!STOCK.length){ v.innerHTML = `<div class="view-head"><h2>Availability</h2></div><div class="empty">Loading stock levels…</div>`; return; }
+  const inStock = STOCK.filter(r=>r.stock>10).length;
+  const low = STOCK.filter(r=>r.stock>0 && r.stock<=10).length;
+  const out = STOCK.filter(r=>r.stock<=0).length;
+  v.innerHTML = `
+    <div class="view-head"><h2>Availability</h2><span class="period">${STOCK.length} products tracked</span></div>
+    <div class="grid kpi-grid">
+      <div class="kpi"><div class="lbl">In Stock</div><div class="val">${num(inStock)}</div></div>
+      <div class="kpi"><div class="lbl">Low Stock</div><div class="val">${num(low)}</div></div>
+      <div class="kpi"><div class="lbl">Out of Stock</div><div class="val">${num(out)}</div></div>
+    </div>
+    <div class="toolbar"><input type="search" id="stSearch" placeholder="Search product…"></div>
+    <div style="font-size:11.5px;color:var(--ink-3);margin-bottom:8px;" id="stCount"></div>
+    <div class="table-wrap"><table class="dt">
+      <thead><tr><th>Product</th><th>Stock Qty</th><th>Status</th></tr></thead>
+      <tbody id="stTbody"></tbody>
+    </table></div>`;
+  document.getElementById('stSearch').addEventListener('input', e => { stockFilter.q = e.target.value; renderStockTable(); });
+  renderStockTable();
+}
+
+/* ============================= LOAD ============================= */
+function setStatus(state, errors){
+  const dot = document.getElementById('syncDot');
+  const label = document.getElementById('syncLabel');
+  dot.classList.remove('loading','warn');
+  if(state==='loading'){ dot.classList.add('loading'); label.textContent = 'Loading…'; }
+  else if(state==='warn'){ dot.classList.add('warn'); label.textContent = 'Partial data'; }
+  else { label.textContent = 'Updated ' + new Date().toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit'}); }
+  const banner = document.getElementById('warnBanner');
+  if(errors && errors.length){
+    banner.style.display = 'block';
+    banner.innerHTML = '<strong>Some data didn\'t load:</strong> ' + errors.map(e=>esc(e)).join('; ');
+  } else banner.style.display = 'none';
+}
+async function loadAll(){
+  setStatus('loading');
+  const errors = [];
+  try{
+    const wb = await downloadWorkbook(CONFIG.PRICELIST_FILE_ID);
+    PRICELIST = extractPriceList(wb);
+  } catch(e){ errors.push("Price list: " + e.message); }
+  try{
+    const wb = await downloadWorkbook(CONFIG.INVENTORY_FILE_ID);
+    STOCK = extractStock(wb);
+  } catch(e){ errors.push("Stock levels: " + e.message); }
+  renderActive();
+  setStatus(errors.length ? 'warn' : 'live', errors);
+}
+
+buildTabs();
+switchTab('prices');
+loadAll();
+setInterval(loadAll, 5*60*1000);
+</script>
+</body>
+</html>
