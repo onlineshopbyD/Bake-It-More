@@ -10,6 +10,7 @@ const ICONS = {
   pricelist: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 12.9 12.7 21a2 2 0 0 1-2.8 0L3.5 14.6a2 2 0 0 1 0-2.8L11.4 3.7a2 2 0 0 1 1.4-.6H19a2 2 0 0 1 2 2v6.4a2 2 0 0 1-.4 1.4Z"/><circle cx="15.5" cy="7.5" r="1.4"/></svg>',
   financials: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.4"/><circle cx="12" cy="12" r="3"/><path d="M6 6v12M18 6v12"/></svg>',
   platform: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M8.5 12h7M8.5 15.5h7M8.5 8.5h3"/></svg>',
+  ytd: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l5-6 4 4 7-9"/><path d="M15 4h5v5"/></svg>',
 };
 
 let SALES=null, FIN=null, INVENTORY=[], INV_SCORECARD={totalValue:0,totalStock:0,outOfStock:0}, INV_PLATFORM={}, PRICELIST=[];
@@ -91,7 +92,7 @@ function lineChart(containerId, points){
 const TABS = [
   {id:'overview', label:'Overview'}, {id:'inventory', label:'Inventory'},
   {id:'pricelist', label:'Price List'}, {id:'financials', label:'Financials'},
-  {id:'platform', label:'Platform Report'},
+  {id:'platform', label:'Platform Report'}, {id:'ytd', label:'YTD Performance'},
 ];
 function buildTabs(){
   ['tabsDesktop','tabsMobile'].forEach(hostId => {
@@ -113,6 +114,7 @@ function renderActiveTab(){
   if(activeTab==='pricelist') renderPriceList();
   if(activeTab==='financials') renderFinancials();
   if(activeTab==='platform') renderPlatformReport();
+  if(activeTab==='ytd') renderYTD();
 }
 function renderAll(){
   SALES = window.SALES_LIVE || SALES;
@@ -486,4 +488,55 @@ function renderPlatformReport(){
   v.querySelectorAll('.chip[data-mode]').forEach(c => c.addEventListener('click', () => { platformMode = c.getAttribute('data-mode'); renderPlatformReport(); }));
   const sel = document.getElementById('platformMonthSel');
   if(sel) sel.addEventListener('change', e => { platformMonth = e.target.value; renderPlatformReport(); });
+}
+
+/* ============================ YTD PRODUCT PERFORMANCE ============================ */
+let ytdFilter = { q:'', sortKey:'r', sortDir:-1 };
+function ytdFilteredRows(){
+  const data = window.YTD_LIVE;
+  if(!data) return [];
+  let rows = data.products.filter(p => !ytdFilter.q || p.n.toLowerCase().includes(ytdFilter.q.toLowerCase()));
+  rows = [...rows].sort((a,b) => (a[ytdFilter.sortKey] - b[ytdFilter.sortKey]) * ytdFilter.sortDir);
+  return rows;
+}
+function renderYTDTable(){
+  const rows = ytdFilteredRows();
+  const data = window.YTD_LIVE;
+  document.getElementById('ytdCount').textContent = rows.length + ' of ' + data.products.length + ' products';
+  document.getElementById('ytdTbody').innerHTML = rows.map((p,i) => `
+    <tr><td class="num" style="color:var(--ink-3)">${i+1}</td><td>${esc(p.n)}</td>
+      <td class="num">${num(p.q)}</td><td class="num">${peso(p.r,{decimals:2})}</td></tr>`).join('');
+}
+function renderYTD(){
+  const v = document.getElementById('view-ytd');
+  const data = window.YTD_LIVE;
+  if(!data || !data.products || !data.products.length){ v.innerHTML = `<div class="view-head"><h2>YTD Product Performance</h2></div>${emptyState('YTD data not loaded yet.')}`; return; }
+
+  const top10 = [...data.products].sort((a,b)=>b.r-a.r).slice(0,10);
+
+  v.innerHTML = `
+    <div class="view-head"><h2>YTD Product Performance</h2><span class="period">${esc(data.periodLabel)} · as of ${esc(data.asOf)}</span></div>
+    ${kpiGrid([
+      {label:'Total YTD Revenue', value:peso(data.totalRevenue,{compact:true}), sub:peso(data.totalRevenue,{decimals:2})},
+      {label:'Total YTD Units Sold', value:num(data.totalUnits), sub:data.products.length+' distinct products'},
+    ])}
+    <div class="card" style="margin-top:12px;">
+      <h3>Top 10 products by revenue</h3><div class="cap">Year-to-date, all channels combined</div>
+      ${barList(top10.map(p=>({label:p.n, value:p.r, formatted:peso(p.r,{compact:true}), color:'var(--accent)'})))}
+    </div>
+    <div class="card" style="margin-top:12px;">
+      <h3>Full product table</h3><div class="cap">Search and sort every product sold this year</div>
+      <div class="toolbar">
+        <input type="search" id="ytdSearch" placeholder="Search product…">
+      </div>
+      <div style="font-size:11.5px;color:var(--ink-3);margin-bottom:8px;" id="ytdCount"></div>
+      <div class="table-wrap"><table class="dt">
+        <thead><tr><th>#</th><th data-sort="n">Product Name</th><th data-sort="q">YTD Units Sold</th><th data-sort="r">YTD Revenue (₱)</th></tr></thead>
+        <tbody id="ytdTbody"></tbody>
+      </table></div>
+    </div>`;
+
+  document.getElementById('ytdSearch').addEventListener('input', e => { ytdFilter.q = e.target.value; renderYTDTable(); });
+  v.querySelectorAll('th[data-sort]').forEach(th => th.addEventListener('click', () => { const key = th.getAttribute('data-sort'); if(ytdFilter.sortKey === key) ytdFilter.sortDir *= -1; else { ytdFilter.sortKey = key; ytdFilter.sortDir = key==='n'?1:-1; } renderYTDTable(); }));
+  renderYTDTable();
 }
