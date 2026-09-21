@@ -598,6 +598,119 @@ function computeYTD(workbook, months){
   return { rows: agg, months: ytdMonths, year: targetYear };
 }
 
+/* ========================= YTD PRODUCT PERFORMANCE (LIVE) ========================= */
+// Same channel-column logic verified against the live dashboard's own Channel
+// Summary totals (Lazada "Item"/qty/subtotal in cols E/G/I; Shopee/Tiktok
+// "Product"+"Variation" in cols E/F, qty in col I, subtotal in col K for
+// Shopee / col J for Tiktok; Marketplace product/qty in cols D/E and the true
+// line subtotal in col I — NOT the "Amount" unit-price column F). Rows start
+// at sheet row 5 (index 4) in every monthly tracker.
+function normWS(s){ return String(s).replace(/\s+/g,' ').trim(); }
+// merge is case-insensitive by key, but prefer a properly-capitalized display
+// name over an all-lowercase one when different months typed the same
+// product differently (e.g. "conaprole" in Jan-Apr vs "Conaprole" from May on).
+function looksProperCased(s){ return /^[A-Z]/.test(s); }
+function addYTDAgg(agg, rawName, q, rev){
+  const name = normWS(rawName);
+  if(!name) return;
+  const key = name.toLowerCase();
+  if(!agg[key]){
+    agg[key] = { n: name, q: 0, r: 0 };
+  } else if(!looksProperCased(agg[key].n) && looksProperCased(name)){
+    agg[key].n = name;
+  }
+  agg[key].q += q; agg[key].r += rev;
+}
+function ytdProcessLazada(rows, agg){
+  for(let r=4; r<rows.length; r++){
+    const row = rows[r] || [];
+    const item = row[4];
+    if(cellText(item) === "") continue;
+    const q = toNum(row[6]), rev = toNum(row[8]);
+    if(q===0 && rev===0) continue;
+    addYTDAgg(agg, item, q, rev);
+  }
+}
+function ytdProcessShopeeTiktok(rows, agg, subtotalCol){
+  for(let r=4; r<rows.length; r++){
+    const row = rows[r] || [];
+    const pname = row[4];
+    if(cellText(pname) === "") continue;
+    const q = toNum(row[8]), rev = toNum(row[subtotalCol]);
+    if(q===0 && rev===0) continue;
+    let name = cellText(pname);
+    const variation = cellText(row[5]);
+    if(variation) name += " - " + variation;
+    addYTDAgg(agg, name, q, rev);
+  }
+}
+function ytdProcessMarketplace(rows, agg){
+  for(let r=4; r<rows.length; r++){
+    const row = rows[r] || [];
+    const pname = row[3];
+    if(cellText(pname) === "") continue;
+    const q = toNum(row[4]), rev = toNum(row[8]);
+    if(q===0 && rev===0) continue;
+    addYTDAgg(agg, pname, q, rev);
+  }
+}
+/* every "<Mon> <year> BIM Order Tracker" file for the current year, sitting
+   in the same folder resolveOrderTrackerFile() already reads the "current
+   month" file from — completed months are static .xlsx exports, the current
+   month is a live native Sheet; both are handled identically by downloadWorkbook. */
+async function resolveYTDOrderTrackerFiles(){
+  const files = await listFolder(CONFIG.ORDER_TRACKER_FOLDER_ID);
+  const year = String(new Date().getFullYear());
+  return files.filter(f => /BIM Order Tracker/i.test(f.name) && f.name.includes(year));
+}
+// fileId -> {modifiedTime, agg} — a completed month's workbook never changes,
+// so only the current month's file (whose modifiedTime keeps advancing) gets
+// re-downloaded and re-parsed on each refresh.
+const YTD_FILE_CACHE = {};
+async function computeYTDLive(files){
+  const merged = {};
+  for(const f of files){
+    const cached = YTD_FILE_CACHE[f.id];
+    let fileAgg;
+    if(cached && cached.modifiedTime === f.modifiedTime){
+      fileAgg = cached.agg;
+    } else {
+      const { workbook } = await downloadWorkbook(f.id);
+      fileAgg = {};
+      const laz = sheetRows(workbook, 'Lazada');
+      const shp = sheetRows(workbook, 'Shopee');
+      const ttk = sheetRows(workbook, 'Tiktok');
+      const mkt = sheetRows(workbook, 'Marketplace');
+      if(laz) ytdProcessLazada(laz, fileAgg);
+      if(shp) ytdProcessShopeeTiktok(shp, fileAgg, 10); // col K
+      if(ttk) ytdProcessShopeeTiktok(ttk, fileAgg, 9);  // col J
+      if(mkt) ytdProcessMarketplace(mkt, fileAgg);
+      YTD_FILE_CACHE[f.id] = { modifiedTime: f.modifiedTime, agg: fileAgg };
+    }
+    for(const key in fileAgg){
+      const p = fileAgg[key];
+      if(!merged[key]){
+        merged[key] = { n: p.n, q: 0, r: 0 };
+      } else if(!looksProperCased(merged[key].n) && looksProperCased(p.n)){
+        merged[key].n = p.n;
+      }
+      merged[key].q += p.q; merged[key].r += p.r;
+    }
+  }
+  const round2 = n => Math.round(n * 100) / 100;
+  const products = Object.values(merged)
+    .map(p => ({ n: p.n, q: round2(p.q), r: round2(p.r) }))
+    .sort((a,b) => b.r - a.r);
+  const totalRevenue = round2(products.reduce((s,p) => s + p.r, 0));
+  const totalUnits = round2(products.reduce((s,p) => s + p.q, 0));
+  const now = new Date();
+  return {
+    asOf: now.toLocaleDateString('en-US', {year:'numeric', month:'short', day:'numeric'}),
+    periodLabel: `Jan 1 – ${now.toLocaleDateString('en-US',{month:'short',day:'numeric'})}, ${now.getFullYear()}`,
+    totalRevenue, totalUnits, products,
+  };
+}
+
 /* ============================== ORCHESTRATION ============================== */
 async function loadAll(){
   setStatus("loading");
@@ -643,6 +756,17 @@ async function loadAll(){
 
   renderAll();
   setStatus(errors.length ? "warn" : "live", errors);
+
+  // YTD Product Performance re-downloads up to 9 monthly workbooks (cached
+  // after the first pass — see YTD_FILE_CACHE), so it runs after the rest of
+  // the dashboard is already rendered rather than blocking it.
+  try{
+    const ytdFiles = await resolveYTDOrderTrackerFiles();
+    window.YTD_LIVE = await computeYTDLive(ytdFiles);
+  } catch(e){
+    console.error("YTD Performance:", e);
+  }
+  if(typeof activeTab !== "undefined" && activeTab === "ytd") renderYTD();
 }
 
 function startAutoRefresh(){
